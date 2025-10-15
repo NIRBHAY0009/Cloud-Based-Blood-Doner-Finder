@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>🩸 Blood Donor Finder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+
+    body {
+      background: linear-gradient(135deg, #ff4b5c, #ff6b81);
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 15px 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      color: #e63946;
+      font-weight: 600;
+    }
+
+    header a {
+      text-decoration: none;
+      color: white;
+      background: #ff4b5c;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: 0.3s;
+    }
+
+    header a:hover {
+      background: #ff2e44;
+      transform: translateY(-2px);
+    }
+
+    .controls {
+      background: #fff;
+      padding: 15px 20px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 900px;
+      margin: 20px auto;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .controls select, .controls input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.95em;
+      min-width: 120px;
+    }
+
+    .controls button {
+      background-color: #ff4b5c;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .controls button:hover {
+      background-color: #ff2e44;
+      transform: translateY(-2px);
+    }
+
+    #map {
+      height: 60vh;
+      width: 100%;
+      border-radius: 10px;
+    }
+
+    .donor-section {
+      width: 90%;
+      max-width: 900px;
+      margin: 20px auto 40px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      padding: 20px;
+    }
+
+    .donor-list {
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .donor-item {
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95em;
+    }
+
+    .donor-item strong {
+      color: #e63946;
+    }
+
+    .donor-item:last-child {
+      border-bottom: none;
+    }
+
+    .donor-item a {
+      text-decoration: none;
+      color: #0077cc;
+      font-weight: 500;
+    }
+
+    footer {
+      text-align: center;
+      color: #fff;
+      font-size: 0.9em;
+      padding: 10px 0 20px;
+    }
+
+    @media (max-width: 600px) {
+      .controls {
+        flex-direction: column;
+      }
+      .controls select, .controls input {
+        width: 100%;
+      }
+      #map { height: 50vh; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>🩸 Cloud-Based Blood Donor Finder</h1>
+    <a href="/register.html">Register as Donor</a>
+  </header>
+
+  <div class="controls">
+    <label>Blood Group:</label>
+    <select id="bloodGroup">
+      <option value="">Any</option>
+      <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+      <option>O+</option><option>O-</option><option>AB+</option><option>AB-</option>
+    </select>
+
+    <label>Radius (km):</label>
+    <input id="radius" type="number" value="20" min="1" max="200">
+
+    <button id="searchBtn">🔍 Search Nearby Donors</button>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="donor-section">
+    <h3 style="color:#e63946; text-align:center;">Available Donors</h3>
+    <div class="donor-list" id="donorList">
+      <p style="text-align:center; color:#666;">Search to view nearby donors...</p>
+    </div>
+  </div>
+
+  <footer>
+    © 2025 Cloud Blood Donor Finder | Built with ❤️ Java + Spring Boot + Firebase
+  </footer>
+
+  <script>
+    const API_BASE = '/api/donors';
+    let map, markers = [];
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 20.5937, lng: 78.9629 }, // Default India
+        zoom: 5,
+      });
+    }
+
+    function clearMarkers() {
+      markers.forEach(m => m.setMap(null));
+      markers = [];
+    }
+
+    function addDonorMarker(d) {
+      const pos = { lat: d.latitude, lng: d.longitude };
+      const marker = new google.maps.Marker({
+        position: pos,
+        map: map,
+        title: `${d.name} (${d.bloodGroup})`,
+        icon: {
+          url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+        }
+      });
+
+      const info = new google.maps.InfoWindow({
+        content: `
+          <div style="font-size:14px;">
+            <strong>${d.name}</strong><br>
+            Blood: <b>${d.bloodGroup}</b><br>
+            City: ${d.city || 'N/A'}<br>
+            📞 <a href="tel:${d.contactNumber}" style="color:#0077cc;">${d.contactNumber}</a>
+          </div>
+        `
+      });
+
+      marker.addListener('click', () => info.open(map, marker));
+      markers.push(marker);
+    }
+
+    async function searchNearby() {
+      const bg = document.getElementById('bloodGroup').value;
+      const radius = parseFloat(document.getElementById('radius').value) || 20;
+
+      if (!navigator.geolocation) {
+        alert('⚠️ Geolocation not supported by your browser.');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        const url = new URL(API_BASE, window.location.origin);
+        url.searchParams.append('lat', lat);
+        url.searchParams.append('lng', lng);
+        url.searchParams.append('radiusKm', radius);
+        if (bg) url.searchParams.append('bloodGroup', bg);
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          alert('❌ Failed to fetch donors. Server error.');
+          return;
+        }
+
+        const donors = await res.json();
+        clearMarkers();
+
+        const donorList = document.getElementById('donorList');
+        donorList.innerHTML = '';
+
+        if (donors.length > 0) {
+          map.setCenter({ lat, lng });
+          map.setZoom(12);
+
+          donors.forEach(d => {
+            addDonorMarker(d);
+            const div = document.createElement('div');
+            div.className = 'donor-item';
+            div.innerHTML = `
+              <div>
+                <strong>${d.name}</strong> (${d.bloodGroup})<br>
+                <small>${d.city || 'N/A'}</small>
+              </div>
+              <a href="tel:${d.contactNumber}">📞 Call</a>
+            `;
+            donorList.appendChild(div);
+          });
+        } else {
+          donorList.innerHTML = '<p style="text-align:center;color:#777;">No donors found nearby.</p>';
+        }
+      }, () => {
+        alert('⚠️ Please allow location access to find nearby donors.');
+      });
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', searchNearby);
+  </script>
+
+  <!-- ✅ Add your Google Maps API key below -->
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC5m8ciVjWSFURj6joaSz2QydYHFIEij5o&callback=initMap">
+  </script>
+</body>
+</html>
